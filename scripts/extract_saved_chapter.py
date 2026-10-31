@@ -49,9 +49,11 @@ class ChapterParser(HTMLParser):
         if self.heading is not None:
             self.heading += data
         if self.active and self.buffer is not None:
-            if '*' in data and set(data.strip()) != {'*'}:
-                raise ValueError('Literal asterisks require review before Markdown conversion.')
-            self.buffer += data
+            if data.strip() == '***' and not self.markers and not self.buffer.strip():
+                escaped = data
+            else:
+                escaped = data.replace('\\', '\\\\').replace('*', '\\*')
+            self.buffer += escaped
             self.visible += data
 
     def handle_endtag(self, tag):

@@ -16,6 +16,13 @@ NS = {'f': 'http://www.gribuser.ru/xml/fictionbook/2.0'}
 
 
 class AssemblyTests(unittest.TestCase):
+    def test_literal_asterisks_inside_and_outside_emphasis(self):
+        state = dict(output='edited.fb2', title='Book', language='ru', parts=[
+            dict(id='559', order='559', text='# Chapter\n\n**\\* First condition.**\n\n\\* Second condition.\n\n***\n\nPath C:\\\\book')])
+        section = ET.fromstring(assembly.render(state)).find('f:body/f:section', NS)
+        self.assertEqual([''.join(p.itertext()) for p in section.findall('.//f:p', NS)],
+                         ['Chapter', '* First condition.', '* Second condition.', '***', 'Path C:\\book'])
+
     def test_whole_paragraph_styles_and_literal_separators(self):
         state = dict(output='edited.fb2', title='Book', language='ru', parts=[
             dict(id='555', order='555', text='# Chapter\n\n> *A & B*\n\n**Bold**\n\n***Both***\n\n***\n\nBefore *inline* after')])

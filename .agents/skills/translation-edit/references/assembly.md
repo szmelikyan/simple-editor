@@ -50,3 +50,5 @@ xmllint --noout --schema /path/to/schema/FictionBook.xsd projects/<slug>/edited.
 ```
 
 XSD проверяет формат, а не полноту. Дополнительно сравнивайте текст и порядок всех абзацев `body/section` с каноническими главами, исключая только структурные маркеры Markdown. Эти проверки и чтение в приложении-читалке — разные проверки; не заявляйте проверку читалкой, если она не выполнялась.
+
+Literal asterisks and backslashes in extracted Markdown use `\*` and `\\`. The FB2 renderer decodes these escapes as text, including inside emphasis, while a standalone `***` separator remains literal.

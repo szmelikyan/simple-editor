@@ -64,11 +64,13 @@ def render_fb2(state):
     def paragraph(parent, text):
         node = element(parent, 'p')
         # Flat inline Markdown from source HTML spans; no nested star syntax.
-        pattern = r'(?<!\*)(\*{1,3})(?!\*)([^*]+?)\1(?!\*)'
+        pattern = r'(?<![\\*])(\*{1,3})(?!\*)((?:\\.|[^*\\])+?)\1(?!\*)'
+        def unescape(value):
+            return re.sub(r'\\([\\*])', r'\1', value)
         previous = None
         position = 0
         for match in re.finditer(pattern, text):
-            prefix = text[position:match.start()]
+            prefix = unescape(text[position:match.start()])
             if previous is None:
                 node.text = (node.text or '') + prefix
             else:
@@ -81,9 +83,9 @@ def render_fb2(state):
                 child = element(child, tag)
                 if child is not node and child in list(node):
                     previous = child
-            child.text = payload
+            child.text = unescape(payload)
             position = match.end()
-        suffix = text[position:]
+        suffix = unescape(text[position:])
         if previous is None:
             node.text = (node.text or '') + suffix
         else:

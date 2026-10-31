@@ -10,6 +10,11 @@ spec.loader.exec_module(extractor)
 
 
 class ExtractionTests(unittest.TestCase):
+    def test_literal_star_in_condition_is_escaped(self):
+        parser = extractor.ChapterParser()
+        parser.feed('<main data-reader-content=""><p><span class="mark-bold">* Condition</span></p></main>')
+        self.assertEqual(parser.paragraphs, ['**\\* Condition**'])
+
     def test_reader_only_mixed_styles_and_empty_spacers(self):
         parser = extractor.ChapterParser()
         parser.feed('''<h1>Chapter title</h1><p>Navigation</p>
