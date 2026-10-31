@@ -16,6 +16,17 @@ NS = {'f': 'http://www.gribuser.ru/xml/fictionbook/2.0'}
 
 
 class AssemblyTests(unittest.TestCase):
+    def test_whole_paragraph_styles_and_literal_separators(self):
+        state = dict(output='edited.fb2', title='Book', language='ru', parts=[
+            dict(id='555', order='555', text='# Chapter\n\n> *A & B*\n\n**Bold**\n\n***Both***\n\n***\n\nBefore *inline* after')])
+        root = ET.fromstring(assembly.render(state))
+        section = root.find('f:body/f:section', NS)
+        self.assertEqual(section.find('f:cite/f:p/f:emphasis', NS).text, 'A & B')
+        self.assertEqual(section.find('f:p/f:strong', NS).text, 'Bold')
+        self.assertEqual(section.find('f:p/f:strong/f:emphasis', NS).text, 'Both')
+        self.assertEqual([''.join(p.itertext()) for p in section.findall('.//f:p', NS)],
+                         ['Chapter', 'A & B', 'Bold', 'Both', '***', 'Before *inline* after'])
+
     def test_fb2_preserves_text_quotes_and_special_characters(self):
         text = '# Глава 1\n\nТекст & <символы> 「 」.\n\n> Цитата.\n\n> 1. (невысоко) летящий.\n\n***\n\nКонец.'
         state = dict(output='edited.fb2', title='Книга & текст', language='ru', parts=[dict(id='1', order='1', text=text)])
