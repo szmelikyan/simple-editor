@@ -4,6 +4,8 @@ import argparse
 import hashlib
 import json
 import os
+import re
+import xml.etree.ElementTree as ET
 from contextlib import contextmanager
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
@@ -52,15 +54,63 @@ def number(value):
     return result
 
 
+def render_fb2(state):
+    ns = 'http://www.gribuser.ru/xml/fictionbook/2.0'
+    ET.register_namespace('', ns)
+    def element(parent, tag, text=None, **attrs):
+        node = ET.SubElement(parent, '{' + ns + '}' + tag, attrs)
+        node.text = text
+        return node
+    book = ET.Element('{' + ns + '}FictionBook')
+    description = element(book, 'description')
+    info = element(description, 'title-info')
+    element(info, 'genre', state.get('genre', 'unrecognised'))
+    author = element(info, 'author')
+    element(author, 'nickname', state.get('author', 'Автор не указан'))
+    element(info, 'book-title', state['title'])
+    element(info, 'lang', state['language'])
+    document = element(description, 'document-info')
+    element(element(document, 'author'), 'nickname', 'simple-editor')
+    element(document, 'program-used', 'assemble.py (Python 3 standard library)')
+    element(document, 'date', state.get('date', 'Дата не указана'))
+    element(document, 'id', 'simple-editor-' + digest(state['title'] + '\n' + state['language']))
+    element(document, 'version', '1.0')
+    body = element(book, 'body')
+    parts = sorted(state['parts'], key=lambda p: number(p['order']))
+    for part in parts:
+        section = element(body, 'section', id='part-' + digest(part['id'])[:16])
+        blocks = re.split(r'\n\s*\n', part['text'].strip())
+        heading = blocks.pop(0) if blocks[0].startswith('# ') else part['id']
+        element(element(section, 'title'), 'p', heading.removeprefix('# '))
+        quote = None
+        for block in blocks:
+            if block.startswith('#'):
+                raise ValueError('FB2 supports one leading chapter heading; nested headings require explicit conversion.')
+            if block.startswith('> '):
+                if quote is None:
+                    quote = element(section, 'cite')
+                text = '\n'.join(line.removeprefix('> ') for line in block.splitlines())
+                element(quote, 'p', text)
+            else:
+                quote = None
+                element(section, 'p', block)
+    if not parts:
+        element(element(body, 'section'), 'empty-line')
+    ET.indent(book, space='  ')
+    return '<?xml version="1.0" encoding="UTF-8"?>\n' + ET.tostring(book, encoding='unicode') + '\n'
+
+
 def render(state):
+    if state['output'].endswith('.fb2'):
+        return render_fb2(state)
     return '# ' + state['title'] + '\n\n' + '\n\n'.join(
         part['text'].strip() for part in sorted(state['parts'], key=lambda p: number(p['order']))
     ) + '\n'
 
 
 def output_path(root, name):
-    if Path(name).name != name or not name.endswith('.md'):
-        raise ValueError('Output must be a Markdown filename inside the project directory.')
+    if Path(name).name != name or not name.endswith(('.md', '.fb2')):
+        raise ValueError('Output must be an .md or .fb2 filename inside the project directory.')
     return root / name
 
 
@@ -92,8 +142,9 @@ def check_master(root, state):
 def save(root, state):
     # State contains every complete part. If interrupted between writes, check_master
     # refuses further updates; explicit rebuild restores the complete master from state.
+    rendered = render(state)
     atomic(root / 'assembly.json', json.dumps(state, ensure_ascii=False, indent=2) + '\n')
-    atomic(output_path(root, state['output']), render(state))
+    atomic(output_path(root, state['output']), rendered)
 
 
 def main():
@@ -103,7 +154,10 @@ def main():
     init.add_argument('project', type=Path)
     init.add_argument('--title', required=True)
     init.add_argument('--language', required=True)
-    init.add_argument('--output', default='edited.md')
+    init.add_argument('--output', default='edited.fb2')
+    convert = sub.add_parser('convert')
+    convert.add_argument('project', type=Path)
+    convert.add_argument('--output', required=True)
     put = sub.add_parser('put')
     put.add_argument('project', type=Path)
     put.add_argument('--id', required=True)
@@ -131,7 +185,14 @@ def main():
     else:
         with lock(root):
             state = read_state(root)
-            if args.command == 'put':
+            if args.command == 'convert':
+                check_master(root, state)
+                target = output_path(root, args.output)
+                if target.exists():
+                    raise ValueError('Conversion target already exists; refusing to overwrite.')
+                state['output'] = args.output
+                save(root, state)
+            elif args.command == 'put':
                 check_master(root, state)
                 order = number(args.order)
                 if any(p['id'] != args.id and number(p['order']) == order for p in state['parts']):
