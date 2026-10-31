@@ -25,7 +25,16 @@ class AssemblyTests(unittest.TestCase):
         self.assertEqual(section.find('f:p/f:strong', NS).text, 'Bold')
         self.assertEqual(section.find('f:p/f:strong/f:emphasis', NS).text, 'Both')
         self.assertEqual([''.join(p.itertext()) for p in section.findall('.//f:p', NS)],
-                         ['Chapter', 'A & B', 'Bold', 'Both', '***', 'Before *inline* after'])
+                         ['Chapter', 'A & B', 'Bold', 'Both', '***', 'Before inline after'])
+
+    def test_mixed_inline_styles_preserve_spaces_and_punctuation(self):
+        state = dict(output='edited.fb2', title='Book', language='ru', parts=[
+            dict(id='556', order='556', text='# Chapter\n\n> **Category:** Main\n\n*One* **two** ***three*** end.\n\nLiteral *** separator')])
+        section = ET.fromstring(assembly.render(state)).find('f:body/f:section', NS)
+        self.assertEqual([''.join(p.itertext()) for p in section.findall('.//f:p', NS)],
+                         ['Chapter', 'Category: Main', 'One two three end.', 'Literal *** separator'])
+        self.assertEqual(section.find('f:cite/f:p/f:strong', NS).tail, ' Main')
+        self.assertEqual(section.find('f:p/f:emphasis', NS).tail, ' ')
 
     def test_fb2_preserves_text_quotes_and_special_characters(self):
         text = '# Глава 1\n\nТекст & <символы> 「 」.\n\n> Цитата.\n\n> 1. (невысоко) летящий.\n\n***\n\nКонец.'

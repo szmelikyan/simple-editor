@@ -63,19 +63,31 @@ def render_fb2(state):
         return node
     def paragraph(parent, text):
         node = element(parent, 'p')
-        # Deliberately limited Markdown: whole-paragraph emphasis only.
-        # A bare *** separator remains literal text.
-        for marker, tags in [('***', ('strong', 'emphasis')),
-                             ('**', ('strong',)), ('*', ('emphasis',))]:
-            if (len(text) > 2 * len(marker) and text.startswith(marker)
-                    and text.endswith(marker)):
-                payload = text[len(marker):-len(marker)]
-                if payload and not payload.startswith('*') and not payload.endswith('*'):
-                    for tag in tags:
-                        node = element(node, tag)
-                    node.text = payload
-                    return
-        node.text = text
+        # Flat inline Markdown from source HTML spans; no nested star syntax.
+        pattern = r'(?<!\*)(\*{1,3})(?!\*)([^*]+?)\1(?!\*)'
+        previous = None
+        position = 0
+        for match in re.finditer(pattern, text):
+            prefix = text[position:match.start()]
+            if previous is None:
+                node.text = (node.text or '') + prefix
+            else:
+                previous.tail = (previous.tail or '') + prefix
+            marker, payload = match.groups()
+            tags = {1: ('emphasis',), 2: ('strong',),
+                    3: ('strong', 'emphasis')}[len(marker)]
+            child = node
+            for tag in tags:
+                child = element(child, tag)
+                if child is not node and child in list(node):
+                    previous = child
+            child.text = payload
+            position = match.end()
+        suffix = text[position:]
+        if previous is None:
+            node.text = (node.text or '') + suffix
+        else:
+            previous.tail = (previous.tail or '') + suffix
     book = ET.Element('{' + ns + '}FictionBook')
     description = element(book, 'description')
     info = element(description, 'title-info')
@@ -111,17 +123,14 @@ def render_fb2(state):
                 paragraph(section, block)
     if not parts:
         element(element(body, 'section'), 'empty-line')
+    # Preserve mixed inline content, including meaningful whitespace tails.
+    content = [(child, child.text, child.tail, child is para)
+               for para in book.iter('{' + ns + '}p') for child in para.iter()]
     ET.indent(book, space='  ')
-    # Pretty-printing must not introduce text inside styled paragraphs.
-    for para in book.iter('{' + ns + '}p'):
-        if len(para):
-            if para.text is not None and not para.text.strip():
-                para.text = None
-            for child in para.iter():
-                if child is not para and child.tail is not None and not child.tail.strip():
-                    child.tail = None
-                if len(child) and child.text is not None and not child.text.strip():
-                    child.text = None
+    for child, text, tail, is_paragraph in content:
+        child.text = text
+        if not is_paragraph:
+            child.tail = tail
     return '<?xml version="1.0" encoding="UTF-8"?>\n' + ET.tostring(book, encoding='unicode') + '\n'
 
 
