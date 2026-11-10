@@ -12,6 +12,18 @@ This is a repository of instructions and command-line tools. The assistant edits
 - An AI assistant that can read and write local files and run commands. Source research also requires web access.
 - Git for cloning and version history.
 
+## When using Codex: reasoning must be at least high
+
+For translation editing in this project, set reasoning effort to **at least `high`**. This is a project requirement. Your selected model must support that level.
+
+Set the following in your Codex configuration:
+
+```toml
+model_reasoning_effort = "high"
+```
+
+The setting is documented in the [official OpenAI documentation](https://developers.openai.com/codex/config-reference/). If your interface has a reasoning effort selector, choose `High` or a higher supported level. For other assistants, use their available thorough reasoning setting and retain all editorial checks; equivalence between providers' effort levels has not been tested.
+
 ## Getting started
 
 ```sh
@@ -40,8 +52,21 @@ Keep different works in separate `projects/<slug>/` folders:
 | `drafts/` | Individual edited chapters in Markdown |
 | `assembly.json` | Canonical reviewed text, explicit order, and SHA-256 hashes |
 | `edited.fb2` | Combined ebook containing completed chapters |
+| `edited-review.docx` | Full text with tracked changes against the supplied translation |
 
 Editorial reports belong in the conversation or console. They are kept out of the clean text and are not saved as report files.
+
+## Word with Track Changes
+
+Export paired source and edited Markdown chapters using Python 3.9+ and the standard library. List chapter identifiers explicitly in reading order:
+
+```sh
+python3 scripts/build_review_docx.py projects/omniscient-reader-side-story --chapters 553 554 555 556 557 558 559 560 561 562 563 564 565 566 --output projects/omniscient-reader-side-story/edited-review.docx
+```
+
+The document records actual OOXML insertions and deletions, including paragraph boundaries and emphasis changes, and enables tracking of further edits. In Word, use Review and All Markup to display the changes. The baseline is `sources/<id>.md`, and the result is `drafts/<id>.md`; subsequent exports show the cumulative difference from the supplied translation.
+
+Before replacing the output, the script checks that accepting all changes recovers the edited chapters and rejecting them recovers the source. It checks text, emphasis, and paragraph styles. Empty Markdown spacing is normalized. The supported emphasis and escape syntax matches the FB2 renderer; arbitrary Markdown is unsupported. Automated checks and the macOS document importer have been run; display and accept/reject commands inside Microsoft Word have not been tested. Export requires no Word installation, API, or specific AI provider.
 
 ## Assemble reviewed chapters
 
